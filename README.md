@@ -65,7 +65,7 @@ func ExampleGo(p Pool) {
 	doSomething(data)
 }
 
-void main() {
+func main() {
 	p := NewDefaultPool()
 	ExampleGo(p)
 
