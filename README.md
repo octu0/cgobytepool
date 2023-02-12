@@ -59,10 +59,10 @@ func bytepool_free(ctx unsafe.Pointer) {
 }
 
 func ExampleGo(p Pool) {
-  data := p.Get(100)
-  defer p.Put(data)
+	data := p.Get(100)
+	defer p.Put(data)
 
-  doSomething(data)
+	doSomething(data)
 }
 
 void main() {
