@@ -70,7 +70,7 @@ func main() {
 	ExampleGo(p)
 
 	h := cgo.NewHandle(p)
-	ExampleCgo(unsage.Pointer(&h))
+	C.ExampleCgo(unsage.Pointer(&h))
 }
 ```
 
