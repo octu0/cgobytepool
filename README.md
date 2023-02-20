@@ -80,16 +80,21 @@ func main() {
 goos: darwin
 goarch: amd64
 pkg: github.com/octu0/cgobytepool
-cpu: Intel(R) Core(TM) i5-8210Y CPU @ 1.60GHz
+cpu: Intel(R) Core(TM) i7-8569U CPU @ 2.80GHz
 BenchmarkCgoBytePool
 BenchmarkCgoBytePool/cgohandle
-BenchmarkCgoBytePool/cgohandle-4         	 1606730	       751.6 ns/op	     160 B/op	       3 allocs/op
+BenchmarkCgoBytePool/cgohandle-8         	   98191	       11206 ns/op	   50204 B/op	      16 allocs/op
+BenchmarkCgoBytePool/cgohandle_reflect
+BenchmarkCgoBytePool/cgohandle_reflect-8 	  370576	        6569 ns/op	    5108 B/op	       9 allocs/op
+BenchmarkCgoBytePool/cgohandle_array
+BenchmarkCgoBytePool/cgohandle_array-8   	  126110	        9421 ns/op	    5100 B/op	       9 allocs/op
 BenchmarkCgoBytePool/malloc
-BenchmarkCgoBytePool/malloc-4            	 1594532	       789.9 ns/op	     160 B/op	       3 allocs/op
+BenchmarkCgoBytePool/malloc-8            	  395970	        3104 ns/op	   21008 B/op	       4 allocs/op
+BenchmarkCgoBytePool/malloc_reflect
+BenchmarkCgoBytePool/malloc_reflect-8    	10014538	       129.3 ns/op	      16 B/op	       1 allocs/op
 BenchmarkCgoBytePool/cgohandle/go
-BenchmarkCgoBytePool/cgohandle/go-4      	 2638782	       452.1 ns/op	      92 B/op	       2 allocs/op
+BenchmarkCgoBytePool/cgohandle/go-8      	 3484324	       310.3 ns/op	       0 B/op	       0 allocs/op
 PASS
-ok  	github.com/octu0/cgobytepool	5.998s
 ```
 
 # License
