@@ -4,7 +4,7 @@ An implementation of `[]byte` pool that can be shared between C/C++ and Go using
 
 # How to use
 
-Memory allocated by Go must be [C.CBytes](https://pkg.go.dev/cmd/cgo)
+Memory allocated by Go must be [C.malloc](https://pkg.go.dev/cmd/cgo)
 
 ```go
 /*
@@ -88,19 +88,19 @@ pkg: github.com/octu0/cgobytepool
 cpu: Intel(R) Core(TM) i5-8210Y CPU @ 1.60GHz
 BenchmarkCgoBytePool
 BenchmarkCgoBytePool/cgohandle
-BenchmarkCgoBytePool/cgohandle-4         	  172785	      6894 ns/op	   21223 B/op	      11 allocs/op
+BenchmarkCgoBytePool/cgohandle-4         	  172785	        6894 ns/op	   21223 B/op	      11 allocs/op
 BenchmarkCgoBytePool/cgohandle_reflect
-BenchmarkCgoBytePool/cgohandle_reflect-4 	  467392	      2438 ns/op	     193 B/op	       6 allocs/op
+BenchmarkCgoBytePool/cgohandle_reflect-4 	  467392	        2438 ns/op	     193 B/op	       6 allocs/op
 BenchmarkCgoBytePool/cgohandle_array
-BenchmarkCgoBytePool/cgohandle_array-4   	  473598	      2492 ns/op	     196 B/op	       6 allocs/op
+BenchmarkCgoBytePool/cgohandle_array-4   	  473598	        2492 ns/op	     196 B/op	       6 allocs/op
 BenchmarkCgoBytePool/malloc
-BenchmarkCgoBytePool/malloc-4            	  201094	      6285 ns/op	   21008 B/op	       4 allocs/op
+BenchmarkCgoBytePool/malloc-4            	  201094	        6285 ns/op	   21008 B/op	       4 allocs/op
 BenchmarkCgoBytePool/malloc_reflect
-BenchmarkCgoBytePool/malloc_reflect-4    	 3540825	       306.6 ns/op	      16 B/op	       1 allocs/op
+BenchmarkCgoBytePool/malloc_reflect-4    	 3540825	        306.6 ns/op	      16 B/op	       1 allocs/op
 BenchmarkCgoBytePool/go/malloc
-BenchmarkCgoBytePool/go/malloc-4         	 2576083	       511.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCgoBytePool/go/malloc-4         	 2576083	        511.2 ns/op	       0 B/op	       0 allocs/op
 BenchmarkCgoBytePool/go/cgo
-BenchmarkCgoBytePool/go/cgo-4            	  732290	      1580 ns/op	      99 B/op	       3 allocs/op
+BenchmarkCgoBytePool/go/cgo-4            	  732290	        1580 ns/op	      99 B/op	       3 allocs/op
 PASS
 ```
 
