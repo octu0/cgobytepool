@@ -1,10 +1,12 @@
-package cgobytepool
+package benchmark
 
 /*
 #include <stdlib.h>
 #include <string.h>
 
-#include "bytepool.h"
+extern void *bytepool_get(void *context, size_t size);
+extern void bytepool_put(void *context, void *data, size_t size);
+extern void bytepool_free(void *context);
 
 typedef struct foo_t {
   unsigned char *data1;
@@ -83,9 +85,25 @@ import "C"
 
 import (
 	"reflect"
-	"runtime/cgo"
 	"unsafe"
+
+	"github.com/octu0/cgobytepool"
 )
+
+//export bytepool_get
+func bytepool_get(ctx unsafe.Pointer, size C.size_t) unsafe.Pointer {
+	return cgobytepool.HandlePoolGet(ctx, int(size))
+}
+
+//export bytepool_put
+func bytepool_put(ctx unsafe.Pointer, data unsafe.Pointer, size C.size_t) {
+	cgobytepool.HandlePoolPut(ctx, data, int(size))
+}
+
+//export bytepool_free
+func bytepool_free(ctx unsafe.Pointer) {
+	cgobytepool.HandlePoolFree(ctx)
+}
 
 func checkCdata1(data []byte) {
 	if len(data) != 16384 {
@@ -132,8 +150,8 @@ func checkCdata3(data []byte) {
 	}
 }
 
-func benchmarkHandle(p Pool) {
-	h := cgo.NewHandle(p)
+func benchmarkHandle(p cgobytepool.Pool) {
+	h := cgobytepool.CgoHandle(p)
 	defer h.Delete()
 
 	ctx := unsafe.Pointer(&h)
@@ -148,8 +166,8 @@ func benchmarkHandle(p Pool) {
 	checkCdata3(data3)
 }
 
-func benchmarkHandleReflect(p Pool) {
-	h := cgo.NewHandle(p)
+func benchmarkHandleReflect(p cgobytepool.Pool) {
+	h := cgobytepool.CgoHandle(p)
 	defer h.Delete()
 
 	ctx := unsafe.Pointer(&h)
@@ -183,8 +201,8 @@ func benchmarkHandleReflect(p Pool) {
 	C.free(fooptr)
 }
 
-func benchmarkHandleArray(p Pool) {
-	h := cgo.NewHandle(p)
+func benchmarkHandleArray(p cgobytepool.Pool) {
+	h := cgobytepool.CgoHandle(p)
 	defer h.Delete()
 
 	ctx := unsafe.Pointer(&h)
@@ -209,8 +227,8 @@ func benchmarkHandleArray(p Pool) {
 	C.free(fooptr)
 }
 
-func benchmarkHandleUnsafeSlice(p Pool) {
-	h := cgo.NewHandle(p)
+func benchmarkHandleUnsafeSlice(p cgobytepool.Pool) {
+	h := cgobytepool.CgoHandle(p)
 	defer h.Delete()
 
 	ctx := unsafe.Pointer(&h)
@@ -283,7 +301,7 @@ func benchmarkMallocUnsafeSlice() {
 	checkCdata3(data3)
 }
 
-func benchmarkGo(p Pool) {
+func benchmarkGo(p cgobytepool.Pool) {
 	n1 := 16 * 1024
 	n2 := 4 * 1024
 	n3 := 512

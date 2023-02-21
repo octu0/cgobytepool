@@ -1,18 +1,20 @@
-package cgobytepool
+package benchmark
 
 import (
 	"testing"
 
 	"github.com/octu0/bp"
+
+	"github.com/octu0/cgobytepool"
 )
 
 func BenchmarkCgoBytePool(b *testing.B) {
 	b.Run("cgohandle", func(tb *testing.B) {
-		p := NewCgoBytePool(
-			DefaultMemoryAlignmentFunc,
-			WithPoolSize(1000, 16*1024),
-			WithPoolSize(1000, 4*1024),
-			WithPoolSize(1000, 512),
+		p := cgobytepool.NewPool(
+			cgobytepool.DefaultMemoryAlignmentFunc,
+			cgobytepool.WithPoolSize(1000, 16*1024),
+			cgobytepool.WithPoolSize(1000, 4*1024),
+			cgobytepool.WithPoolSize(1000, 512),
 		)
 		tb.ResetTimer()
 		tb.RunParallel(func(pb *testing.PB) {
@@ -22,11 +24,11 @@ func BenchmarkCgoBytePool(b *testing.B) {
 		})
 	})
 	b.Run("cgohandle_reflect", func(tb *testing.B) {
-		p := NewCgoBytePool(
-			DefaultMemoryAlignmentFunc,
-			WithPoolSize(1000, 16*1024),
-			WithPoolSize(1000, 4*1024),
-			WithPoolSize(1000, 512),
+		p := cgobytepool.NewPool(
+			cgobytepool.DefaultMemoryAlignmentFunc,
+			cgobytepool.WithPoolSize(1000, 16*1024),
+			cgobytepool.WithPoolSize(1000, 4*1024),
+			cgobytepool.WithPoolSize(1000, 512),
 		)
 		tb.ResetTimer()
 		tb.RunParallel(func(pb *testing.PB) {
@@ -36,11 +38,11 @@ func BenchmarkCgoBytePool(b *testing.B) {
 		})
 	})
 	b.Run("cgohandle_array", func(tb *testing.B) {
-		p := NewCgoBytePool(
-			DefaultMemoryAlignmentFunc,
-			WithPoolSize(1000, 16*1024),
-			WithPoolSize(1000, 4*1024),
-			WithPoolSize(1000, 512),
+		p := cgobytepool.NewPool(
+			cgobytepool.DefaultMemoryAlignmentFunc,
+			cgobytepool.WithPoolSize(1000, 16*1024),
+			cgobytepool.WithPoolSize(1000, 4*1024),
+			cgobytepool.WithPoolSize(1000, 512),
 		)
 		tb.ResetTimer()
 		tb.RunParallel(func(pb *testing.PB) {
@@ -50,11 +52,11 @@ func BenchmarkCgoBytePool(b *testing.B) {
 		})
 	})
 	b.Run("cgohandle_unsafeslice", func(tb *testing.B) {
-		p := NewCgoBytePool(
-			DefaultMemoryAlignmentFunc,
-			WithPoolSize(1000, 16*1024),
-			WithPoolSize(1000, 4*1024),
-			WithPoolSize(1000, 512),
+		p := cgobytepool.NewPool(
+			cgobytepool.DefaultMemoryAlignmentFunc,
+			cgobytepool.WithPoolSize(1000, 16*1024),
+			cgobytepool.WithPoolSize(1000, 4*1024),
+			cgobytepool.WithPoolSize(1000, 512),
 		)
 		tb.ResetTimer()
 		tb.RunParallel(func(pb *testing.PB) {
@@ -85,11 +87,11 @@ func BenchmarkCgoBytePool(b *testing.B) {
 		})
 	})
 	b.Run("go/malloc", func(tb *testing.B) {
-		p := NewCgoBytePool(
-			DefaultMemoryAlignmentFunc,
-			WithPoolSize(1000, 16*1024),
-			WithPoolSize(1000, 4*1024),
-			WithPoolSize(1000, 512),
+		p := cgobytepool.NewPool(
+			cgobytepool.DefaultMemoryAlignmentFunc,
+			cgobytepool.WithPoolSize(1000, 16*1024),
+			cgobytepool.WithPoolSize(1000, 4*1024),
+			cgobytepool.WithPoolSize(1000, 512),
 		)
 		tb.ResetTimer()
 		tb.RunParallel(func(pb *testing.PB) {
@@ -99,11 +101,11 @@ func BenchmarkCgoBytePool(b *testing.B) {
 		})
 	})
 	b.Run("go/cgo", func(tb *testing.B) {
-		p := NewCgoBytePool(
-			DefaultMemoryAlignmentFunc,
-			WithPoolSize(1000, 16*1024),
-			WithPoolSize(1000, 4*1024),
-			WithPoolSize(1000, 512),
+		p := cgobytepool.NewPool(
+			cgobytepool.DefaultMemoryAlignmentFunc,
+			cgobytepool.WithPoolSize(1000, 16*1024),
+			cgobytepool.WithPoolSize(1000, 4*1024),
+			cgobytepool.WithPoolSize(1000, 512),
 		)
 		tb.ResetTimer()
 		i := 0

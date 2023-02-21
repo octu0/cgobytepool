@@ -1,7 +1,7 @@
 package cgobytepool
 
 /*
-#include "bytepool.h"
+#include <stdlib.h>
 */
 import "C"
 
@@ -29,29 +29,31 @@ type Pool interface {
 	Get(int) unsafe.Pointer
 	Put(unsafe.Pointer, int)
 	Close()
+
 	Stats() PoolStats
 }
 
-//export bytepool_get
-func bytepool_get(ctx unsafe.Pointer, size C.size_t) unsafe.Pointer {
+func HandlePoolGet(ctx unsafe.Pointer, size int) unsafe.Pointer {
 	h := *(*cgo.Handle)(ctx)
 
 	p := h.Value().(Pool)
-	return p.Get(int(size))
+	return p.Get(size)
 }
 
-//export bytepool_put
-func bytepool_put(ctx unsafe.Pointer, data unsafe.Pointer, size C.size_t) {
+func HandlePoolPut(ctx unsafe.Pointer, data unsafe.Pointer, size int) {
 	h := *(*cgo.Handle)(ctx)
 
 	p := h.Value().(Pool)
-	p.Put(data, int(size))
+	p.Put(data, size)
 }
 
-//export bytepool_free
-func bytepool_free(ctx unsafe.Pointer) {
+func HandlePoolFree(ctx unsafe.Pointer) {
 	h := *(*cgo.Handle)(ctx)
 	h.Delete()
+}
+
+func CgoHandle(p Pool) cgo.Handle {
+	return cgo.NewHandle(p)
 }
 
 type MemoryAligmentFunc func(int) int
@@ -140,8 +142,21 @@ func (p *CgoBytePool) Stats() PoolStats {
 		ps.Allocs[i].Size = pp.AllocBytes()
 	}
 	ps.Fallback.ID = 0
-	ps.Fallback.Size = atomic.LoadInt64(&p.bytes)
+	ps.Fallback.Size = p.AllocBytes()
 	return ps
+}
+
+func (p *CgoBytePool) AllocBytes() int64 {
+	return atomic.LoadInt64(&p.bytes)
+}
+
+func (p *CgoBytePool) TotalAllocBytes() int64 {
+	total := int64(0)
+	for _, pp := range p.pools {
+		total += pp.AllocBytes()
+	}
+	total += p.AllocBytes()
+	return total
 }
 
 func (p *CgoBytePool) Close() {
@@ -155,7 +170,7 @@ func finalizeDefaultPool(p *CgoBytePool) {
 	p.Close()
 }
 
-func NewCgoBytePool(alignFunc MemoryAligmentFunc, poolFuncs ...WithPoolFunc) *CgoBytePool {
+func NewPool(alignFunc MemoryAligmentFunc, poolFuncs ...WithPoolFunc) *CgoBytePool {
 	if alignFunc == nil {
 		alignFunc = DefaultMemoryAlignmentFunc
 	}
@@ -194,7 +209,6 @@ func (p *cmallocPool) Get() unsafe.Pointer {
 func (p *cmallocPool) Put(data unsafe.Pointer, size int) {
 	if size < p.bufSize {
 		C.free(data)
-		atomic.AddInt64(&p.bytes, -1*int64(p.bufSize))
 		return // discard
 	}
 

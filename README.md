@@ -1,10 +1,12 @@
 # `cgobytepool`
 
-An implementation of `[]byte` pool that can be shared between C/C++ and Go using [cgo.Handle](https://pkg.go.dev/runtime/cgo#Handle)
+Shared byte pool implementation between C and Go(cgo)  
+`unsigned char*` in C / `[]byte` in Go (convertible using [unsafe.Slice](https://pkg.go.dev/unsafe#Slice) or [reflect.SliceHeader](https://pkg.go.dev/reflect#SliceHeader))  
+this pool shares using [cgo.Handle](https://pkg.go.dev/runtime/cgo#Handle)
 
 # How to use
 
-Memory allocated by Go must be [C.malloc](https://pkg.go.dev/cmd/cgo)
+Need to declare `extern` in C and declare `export` in Go
 
 ```go
 /*
@@ -24,58 +26,49 @@ static void ExampleCgo(void *ctx) {
 import "C"
 
 import (
-	"runtime/cgo"
 	"unsafe"
-)
 
-type Pool interface {
-	Get(int) unsafe.Pointer
-	Put(unsafe.Pointer, int)
-}
+	"github.com/octu0/cgobytepool"
+)
 
 //export bytepool_get
 func bytepool_get(ctx unsafe.Pointer, size C.size_t) unsafe.Pointer {
-	h := *(*cgo.Handle)(ctx)
-
-	p := h.Value().(Pool)
-	n := int(size)
-	return p.Get(n)
+	return cgobytepool.HandlePoolGet(ctx, int(size))
 }
 
 //export bytepool_put
 func bytepool_put(ctx unsafe.Pointer, data unsafe.Pointer, size C.size_t) {
-	h := *(*cgo.Handle)(ctx)
-
-	p := h.Value().(Pool)
-	n := int(size)
-	p.Put(data, n)
+	cgobytepool.HandlePoolPut(ctx, data, int(size))
 }
 
 //export bytepool_free
 func bytepool_free(ctx unsafe.Pointer) {
-	h := *(*cgo.Handle)(ctx)
-	h.Delete()
+	cgobytepool.HandlePoolFree(ctx)
 }
 
-func ExampleGo(p Pool) {
+func ExampleGo(p cgobytepool.Pool) {
 	ptr := p.Get(100)
 	defer p.Put(ptr, 100)
 
-	var data []byte
-	s := (*reflect.SliceHeader)(unsafe.Pointer(&data))
-	s.Cap = 100
-	s.Len = 100
-	s.Data = uintptr(ptr)
+	data := unsafe.Slice((*byte)(ptr), 100)
+	println(len(data)) // => 100
+	println(cap(data)) // => 100
 
 	doSomething(data)
 }
 
 func main() {
-	p := NewDefaultPool()
+	p := cgobytepool.NewPool(
+		cgobytepool.DefaultMemoryAlignmentFunc,
+		cgobytepool.WithPoolSize(1000, 16*1024),
+		cgobytepool.WithPoolSize(1000, 4*1024),
+		cgobytepool.WithPoolSize(1000, 512),
+	)
+
 	ExampleGo(p)
 
-	h := cgo.NewHandle(p)
-	C.ExampleCgo(unsage.Pointer(&h))
+	h := cgobytepool.CgoHandle(p)
+	C.ExampleCgo(unsafe.Pointer(&h))
 }
 ```
 
@@ -84,23 +77,29 @@ func main() {
 ```
 goos: darwin
 goarch: amd64
-pkg: github.com/octu0/cgobytepool
-cpu: Intel(R) Core(TM) i5-8210Y CPU @ 1.60GHz
+pkg: github.com/octu0/cgobytepool/benchmark
+cpu: Intel(R) Core(TM) i7-8569U CPU @ 2.80GHz
 BenchmarkCgoBytePool
 BenchmarkCgoBytePool/cgohandle
-BenchmarkCgoBytePool/cgohandle-4         	  172785	        6894 ns/op	   21223 B/op	      11 allocs/op
+BenchmarkCgoBytePool/cgohandle-8         	              219858	       4697 ns/op	     21205 B/op	      10 allocs/op
 BenchmarkCgoBytePool/cgohandle_reflect
-BenchmarkCgoBytePool/cgohandle_reflect-4 	  467392	        2438 ns/op	     193 B/op	       6 allocs/op
+BenchmarkCgoBytePool/cgohandle_reflect-8 	              571408	       2064 ns/op	       198 B/op	       6 allocs/op
 BenchmarkCgoBytePool/cgohandle_array
-BenchmarkCgoBytePool/cgohandle_array-4   	  473598	        2492 ns/op	     196 B/op	       6 allocs/op
+BenchmarkCgoBytePool/cgohandle_array-8   	              583810	       2048 ns/op	       197 B/op	       6 allocs/op
+BenchmarkCgoBytePool/cgohandle_unsafeslice
+BenchmarkCgoBytePool/cgohandle_unsafeslice-8         	  597548	       2298 ns/op	       199 B/op	       6 allocs/op
 BenchmarkCgoBytePool/malloc
-BenchmarkCgoBytePool/malloc-4            	  201094	        6285 ns/op	   21008 B/op	       4 allocs/op
+BenchmarkCgoBytePool/malloc-8                        	  347733	       2967 ns/op	     21008 B/op	       4 allocs/op
 BenchmarkCgoBytePool/malloc_reflect
-BenchmarkCgoBytePool/malloc_reflect-4    	 3540825	        306.6 ns/op	      16 B/op	       1 allocs/op
+BenchmarkCgoBytePool/malloc_reflect-8                	10762393	        120.6 ns/op	      16 B/op	       1 allocs/op
+BenchmarkCgoBytePool/malloc_unsafeslice
+BenchmarkCgoBytePool/malloc_unsafeslice-8            	 8975125	        138.8 ns/op	      16 B/op	       1 allocs/op
 BenchmarkCgoBytePool/go/malloc
-BenchmarkCgoBytePool/go/malloc-4         	 2576083	        511.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCgoBytePool/go/malloc-8                     	 3332970	        325.8 ns/op	       0 B/op	       0 allocs/op
 BenchmarkCgoBytePool/go/cgo
-BenchmarkCgoBytePool/go/cgo-4            	  732290	        1580 ns/op	      99 B/op	       3 allocs/op
+BenchmarkCgoBytePool/go/cgo-8                        	  967604	       1178 ns/op	        95 B/op	       3 allocs/op
+BenchmarkCgoBytePool/bp
+BenchmarkCgoBytePool/bp-8                            	 4372924	        305.3 ns/op	       0 B/op	       0 allocs/op
 PASS
 ```
 
