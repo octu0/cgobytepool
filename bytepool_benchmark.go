@@ -158,17 +158,17 @@ func benchmarkHandleReflect(p Pool) {
 
 	var data1, data2, data3 []byte
 	s1 := (*reflect.SliceHeader)(unsafe.Pointer(&data1))
-	s1.Cap = defaultAlign(int(foo.size1))
+	s1.Cap = int(foo.size1)
 	s1.Len = int(foo.size1)
 	s1.Data = uintptr(unsafe.Pointer(foo.data1))
 
 	s2 := (*reflect.SliceHeader)(unsafe.Pointer(&data2))
-	s2.Cap = defaultAlign(int(foo.size2))
+	s2.Cap = int(foo.size2)
 	s2.Len = int(foo.size2)
 	s2.Data = uintptr(unsafe.Pointer(foo.data2))
 
 	s3 := (*reflect.SliceHeader)(unsafe.Pointer(&data3))
-	s3.Cap = defaultAlign(int(foo.size3))
+	s3.Cap = int(foo.size3)
 	s3.Len = int(foo.size3)
 	s3.Data = uintptr(unsafe.Pointer(foo.data3))
 
@@ -176,9 +176,9 @@ func benchmarkHandleReflect(p Pool) {
 	checkCdata2(data2)
 	checkCdata3(data3)
 
-	p.Put(unsafe.Pointer(foo.data1), defaultAlign(int(foo.size1)))
-	p.Put(unsafe.Pointer(foo.data2), defaultAlign(int(foo.size2)))
-	p.Put(unsafe.Pointer(foo.data3), defaultAlign(int(foo.size3)))
+	p.Put(unsafe.Pointer(foo.data1), int(foo.size1))
+	p.Put(unsafe.Pointer(foo.data2), int(foo.size2))
+	p.Put(unsafe.Pointer(foo.data3), int(foo.size3))
 
 	C.free(fooptr)
 }
@@ -192,19 +192,42 @@ func benchmarkHandleArray(p Pool) {
 	foo := (*C.foo_t)(fooptr)
 
 	data1arr := (*[1 << 32]byte)(unsafe.Pointer(foo.data1))
-	data1 := data1arr[:int(foo.size1):defaultAlign(int(foo.size1))]
+	data1 := data1arr[:int(foo.size1):int(foo.size1)]
 	data2arr := (*[1 << 32]byte)(unsafe.Pointer(foo.data2))
-	data2 := data2arr[:int(foo.size2):defaultAlign(int(foo.size2))]
+	data2 := data2arr[:int(foo.size2):int(foo.size2)]
 	data3arr := (*[1 << 32]byte)(unsafe.Pointer(foo.data3))
-	data3 := data3arr[:int(foo.size3):defaultAlign(int(foo.size3))]
+	data3 := data3arr[:int(foo.size3):int(foo.size3)]
 
 	checkCdata1(data1)
 	checkCdata2(data2)
 	checkCdata3(data3)
 
-	p.Put(unsafe.Pointer(foo.data1), defaultAlign(int(foo.size1)))
-	p.Put(unsafe.Pointer(foo.data2), defaultAlign(int(foo.size2)))
-	p.Put(unsafe.Pointer(foo.data3), defaultAlign(int(foo.size3)))
+	p.Put(unsafe.Pointer(foo.data1), int(foo.size1))
+	p.Put(unsafe.Pointer(foo.data2), int(foo.size2))
+	p.Put(unsafe.Pointer(foo.data3), int(foo.size3))
+
+	C.free(fooptr)
+}
+
+func benchmarkHandleUnsafeSlice(p Pool) {
+	h := cgo.NewHandle(p)
+	defer h.Delete()
+
+	ctx := unsafe.Pointer(&h)
+	fooptr := unsafe.Pointer(C.alloc_bytepool(ctx))
+	foo := (*C.foo_t)(fooptr)
+
+	data1 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data1)), int(foo.size1))
+	data2 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data2)), int(foo.size2))
+	data3 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data3)), int(foo.size3))
+
+	checkCdata1(data1)
+	checkCdata2(data2)
+	checkCdata3(data3)
+
+	p.Put(unsafe.Pointer(foo.data1), int(foo.size1))
+	p.Put(unsafe.Pointer(foo.data2), int(foo.size2))
+	p.Put(unsafe.Pointer(foo.data3), int(foo.size3))
 
 	C.free(fooptr)
 }
@@ -228,19 +251,32 @@ func benchmarkMallocReflect() {
 
 	var data1, data2, data3 []byte
 	s1 := (*reflect.SliceHeader)(unsafe.Pointer(&data1))
-	s1.Cap = defaultAlign(int(foo.size1))
+	s1.Cap = int(foo.size1)
 	s1.Len = int(foo.size1)
 	s1.Data = uintptr(unsafe.Pointer(foo.data1))
 
 	s2 := (*reflect.SliceHeader)(unsafe.Pointer(&data2))
-	s2.Cap = defaultAlign(int(foo.size2))
+	s2.Cap = int(foo.size2)
 	s2.Len = int(foo.size2)
 	s2.Data = uintptr(unsafe.Pointer(foo.data2))
 
 	s3 := (*reflect.SliceHeader)(unsafe.Pointer(&data3))
-	s3.Cap = defaultAlign(int(foo.size3))
+	s3.Cap = int(foo.size3)
 	s3.Len = int(foo.size3)
 	s3.Data = uintptr(unsafe.Pointer(foo.data3))
+
+	checkCdata1(data1)
+	checkCdata2(data2)
+	checkCdata3(data3)
+}
+
+func benchmarkMallocUnsafeSlice() {
+	foo := (*C.foo_t)(unsafe.Pointer(C.alloc_malloc()))
+	defer C.free_malloc(foo)
+
+	data1 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data1)), int(foo.size1))
+	data2 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data2)), int(foo.size2))
+	data3 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data3)), int(foo.size3))
 
 	checkCdata1(data1)
 	checkCdata2(data2)
@@ -251,26 +287,23 @@ func benchmarkGo(p Pool) {
 	n1 := 16 * 1024
 	n2 := 4 * 1024
 	n3 := 512
-	a1 := defaultAlign(n1)
-	a2 := defaultAlign(n2)
-	a3 := defaultAlign(n3)
 	ptr1 := p.Get(n1)
 	ptr2 := p.Get(n2)
 	ptr3 := p.Get(n3)
 
 	var data1, data2, data3 []byte
 	s1 := (*reflect.SliceHeader)(unsafe.Pointer(&data1))
-	s1.Cap = a1
+	s1.Cap = n1
 	s1.Len = n1
 	s1.Data = uintptr(ptr1)
 
 	s2 := (*reflect.SliceHeader)(unsafe.Pointer(&data2))
-	s2.Cap = a2
+	s2.Cap = n2
 	s2.Len = n2
 	s2.Data = uintptr(ptr2)
 
 	s3 := (*reflect.SliceHeader)(unsafe.Pointer(&data3))
-	s3.Cap = a3
+	s3.Cap = n3
 	s3.Len = n3
 	s3.Data = uintptr(ptr3)
 

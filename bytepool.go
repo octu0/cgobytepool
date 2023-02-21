@@ -8,21 +8,28 @@ import "C"
 import (
 	"runtime"
 	"runtime/cgo"
+	"sort"
+	"sync"
 	"sync/atomic"
 	"unsafe"
 )
 
+type PoolStats struct {
+	Allocs []struct {
+		ID   int
+		Size int64
+	}
+	Fallback struct {
+		ID   int
+		Size int64
+	}
+}
+
 type Pool interface {
 	Get(int) unsafe.Pointer
 	Put(unsafe.Pointer, int)
-}
-
-const (
-	alignmentSize int = 256
-)
-
-func defaultAlign(n int) int {
-	return ((n + alignmentSize) >> 3) << 3
+	Close()
+	Stats() PoolStats
 }
 
 //export bytepool_get
@@ -30,8 +37,7 @@ func bytepool_get(ctx unsafe.Pointer, size C.size_t) unsafe.Pointer {
 	h := *(*cgo.Handle)(ctx)
 
 	p := h.Value().(Pool)
-	n := int(size)
-	return p.Get(defaultAlign(n))
+	return p.Get(int(size))
 }
 
 //export bytepool_put
@@ -39,8 +45,7 @@ func bytepool_put(ctx unsafe.Pointer, data unsafe.Pointer, size C.size_t) {
 	h := *(*cgo.Handle)(ctx)
 
 	p := h.Value().(Pool)
-	n := defaultAlign(int(size))
-	p.Put(data, n)
+	p.Put(data, int(size))
 }
 
 //export bytepool_free
@@ -49,16 +54,38 @@ func bytepool_free(ctx unsafe.Pointer) {
 	h.Delete()
 }
 
-var (
-	_ Pool = (*defaultPool)(nil)
-)
+type MemoryAligmentFunc func(int) int
 
-type defaultPool struct {
-	pools []*byteslicepool
-	bytes int64
+type WithPoolFunc func(MemoryAligmentFunc) *cmallocPool
+
+func WithPoolSize(poolSize, bufferSize int) WithPoolFunc {
+	return func(fn MemoryAligmentFunc) *cmallocPool {
+		return newCMallocPool(poolSize, fn(bufferSize))
+	}
 }
 
-func (p *defaultPool) find(size int) (*byteslicepool, bool) {
+const (
+	defaultMemoryAlignmentSize int = 256
+)
+
+var (
+	DefaultMemoryAlignmentFunc MemoryAligmentFunc = func(n int) int {
+		return ((n + defaultMemoryAlignmentSize) >> 3) << 3
+	}
+)
+
+var (
+	_ Pool = (*CgoBytePool)(nil)
+)
+
+type CgoBytePool struct {
+	pools     []*cmallocPool
+	bytes     int64
+	alignFunc MemoryAligmentFunc
+	fallbacks *sync.Map // map[uintptr]unsafe.Pointer
+}
+
+func (p *CgoBytePool) find(size int) (*cmallocPool, bool) {
 	for _, pp := range p.pools {
 		if size <= pp.bufSize {
 			return pp, true
@@ -67,58 +94,92 @@ func (p *defaultPool) find(size int) (*byteslicepool, bool) {
 	return nil, false
 }
 
-func (p *defaultPool) Get(n int) unsafe.Pointer {
+func (p *CgoBytePool) Get(size int) unsafe.Pointer {
+	n := p.alignFunc(size)
 	if pp, ok := p.find(n); ok {
 		return pp.Get()
 	}
-	atomic.AddInt64(&p.bytes, int64(n))
-	return unsafe.Pointer(C.malloc(C.size_t(n))) // fallback
+	return p.fallbackGet(n)
 }
 
-func (p *defaultPool) Put(b unsafe.Pointer, n int) {
+func (p *CgoBytePool) fallbackGet(n int) unsafe.Pointer {
+	atomic.AddInt64(&p.bytes, int64(n))
+	ptr := unsafe.Pointer(C.malloc(C.size_t(n)))
+	p.fallbacks.Store(uintptr(ptr), ptr)
+	return ptr
+}
+
+func (p *CgoBytePool) Put(b unsafe.Pointer, size int) {
+	n := p.alignFunc(size)
 	if pp, ok := p.find(n); ok {
 		pp.Put(b, n)
 		return
 	}
-	C.free(b) // fallback
-	atomic.AddInt64(&p.bytes, -1*int64(n))
+	p.fallbackPut(b, n)
 }
 
-func (p *defaultPool) AllocBytes() int64 {
-	total := int64(0)
-	for _, pp := range p.pools {
-		total += pp.AllocBytes()
+func (p *CgoBytePool) fallbackPut(b unsafe.Pointer, n int) {
+	v, ok := p.fallbacks.LoadAndDelete(uintptr(b))
+	if ok {
+		ptr := v.(unsafe.Pointer)
+		C.free(ptr)
+		atomic.AddInt64(&p.bytes, -1*int64(n))
 	}
-	total += atomic.LoadInt64(&p.bytes)
-	return total
 }
 
-func (p *defaultPool) Close() {
+func (p *CgoBytePool) Stats() PoolStats {
+	ps := PoolStats{
+		Allocs: make([]struct {
+			ID   int
+			Size int64
+		}, len(p.pools)),
+	}
+
+	for i, pp := range p.pools {
+		ps.Allocs[i].ID = i
+		ps.Allocs[i].Size = pp.AllocBytes()
+	}
+	ps.Fallback.ID = 0
+	ps.Fallback.Size = atomic.LoadInt64(&p.bytes)
+	return ps
+}
+
+func (p *CgoBytePool) Close() {
+	runtime.SetFinalizer(p, nil) // clear finalizer
 	for _, pp := range p.pools {
 		pp.Close()
 	}
 }
 
-func NewDefaultPool() *defaultPool {
-	poolSize := 1000
-	pools := make([]*byteslicepool, 7)
-	for i := 0; i < 7; i += 1 {
-		pools[i] = newByteSlicePool(poolSize, defaultAlign(4096*(i+1)))
+func finalizeDefaultPool(p *CgoBytePool) {
+	p.Close()
+}
+
+func NewCgoBytePool(alignFunc MemoryAligmentFunc, poolFuncs ...WithPoolFunc) *CgoBytePool {
+	if alignFunc == nil {
+		alignFunc = DefaultMemoryAlignmentFunc
 	}
-	p := &defaultPool{pools, 0}
-	runtime.SetFinalizer(p, func(me *defaultPool) {
-		me.Close()
+
+	pools := make([]*cmallocPool, len(poolFuncs))
+	for i, fn := range poolFuncs {
+		pools[i] = fn(alignFunc)
+	}
+	sort.Slice(pools, func(i, j int) bool {
+		return pools[i].bufSize < pools[j].bufSize // order bufSize asc
 	})
+
+	p := &CgoBytePool{pools, 0, alignFunc, new(sync.Map)}
+	runtime.SetFinalizer(p, finalizeDefaultPool)
 	return p
 }
 
-type byteslicepool struct {
+type cmallocPool struct {
 	pool    chan unsafe.Pointer
 	bufSize int
 	bytes   int64
 }
 
-func (p *byteslicepool) Get() unsafe.Pointer {
+func (p *cmallocPool) Get() unsafe.Pointer {
 	select {
 	case buf := <-p.pool:
 		// reuse
@@ -130,12 +191,13 @@ func (p *byteslicepool) Get() unsafe.Pointer {
 	}
 }
 
-func (p *byteslicepool) Put(data unsafe.Pointer, size int) {
+func (p *cmallocPool) Put(data unsafe.Pointer, size int) {
 	if size < p.bufSize {
 		C.free(data)
 		atomic.AddInt64(&p.bytes, -1*int64(p.bufSize))
 		return // discard
 	}
+
 	select {
 	case p.pool <- data:
 		// ok
@@ -146,11 +208,11 @@ func (p *byteslicepool) Put(data unsafe.Pointer, size int) {
 	}
 }
 
-func (p *byteslicepool) AllocBytes() int64 {
+func (p *cmallocPool) AllocBytes() int64 {
 	return atomic.LoadInt64(&p.bytes)
 }
 
-func (p *byteslicepool) Close() {
+func (p *cmallocPool) Close() {
 	close(p.pool)
 	for data := range p.pool {
 		C.free(data)
@@ -158,8 +220,8 @@ func (p *byteslicepool) Close() {
 	}
 }
 
-func newByteSlicePool(poolSize, bufSize int) *byteslicepool {
-	return &byteslicepool{
+func newCMallocPool(poolSize, bufSize int) *cmallocPool {
+	return &cmallocPool{
 		pool:    make(chan unsafe.Pointer, poolSize),
 		bufSize: bufSize,
 		bytes:   0,
