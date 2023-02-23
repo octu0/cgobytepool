@@ -1,5 +1,10 @@
 # `cgobytepool`
 
+[![MIT License](https://img.shields.io/github/license/octu0/cgobytepool)](https://github.com/octu0/cgobytepool/blob/master/LICENSE)
+[![GoDoc](https://godoc.org/github.com/octu0/cgobytepool?status.svg)](https://godoc.org/github.com/octu0/cgobytepool)
+[![Go Report Card](https://goreportcard.com/badge/github.com/octu0/cgobytepool)](https://goreportcard.com/report/github.com/octu0/cgobytepool)
+[![Releases](https://img.shields.io/github/v/release/octu0/cgobytepool)](https://github.com/octu0/cgobytepool/releases)
+
 Shared byte pool implementation between C and Go(cgo)  
 `unsigned char*` in C / `[]byte` in Go (convertible using [unsafe.Slice](https://pkg.go.dev/unsafe#Slice) or [reflect.SliceHeader](https://pkg.go.dev/reflect#SliceHeader))  
 this pool shares using [cgo.Handle](https://pkg.go.dev/runtime/cgo#Handle)
