@@ -80,6 +80,27 @@ static void free_malloc(foo_t *foo) {
   }
   free(foo);
 }
+
+static int check1(unsigned char *data) {
+  if (data[0] == 140 && data[1000] == 141 && data[16383] == 142) {
+    return 0;
+  }
+  return -1;
+}
+
+static int check2(unsigned char *data) {
+  if (data[0] == 150 && data[500] == 151 && data[4095] == 152) {
+    return 0;
+  }
+  return -1;
+}
+
+static int check3(unsigned char *data) {
+  if (data[0] == 160 && data[510] == 161 && data[511] == 162) {
+    return 0;
+  }
+  return -1;
+}
 */
 import "C"
 
@@ -288,6 +309,19 @@ func benchmarkMallocReflect() {
 	checkCdata3(data3)
 }
 
+func benchmarkMallocReflect2() {
+	foo := (*C.foo_t)(unsafe.Pointer(C.alloc_malloc()))
+	defer C.free_malloc(foo)
+
+	data1 := cgobytepool.GoBytes(unsafe.Pointer(foo.data1), int(foo.size1))
+	data2 := cgobytepool.GoBytes(unsafe.Pointer(foo.data2), int(foo.size2))
+	data3 := cgobytepool.GoBytes(unsafe.Pointer(foo.data3), int(foo.size3))
+
+	checkCdata1(data1)
+	checkCdata2(data2)
+	checkCdata3(data3)
+}
+
 func benchmarkMallocUnsafeSlice() {
 	foo := (*C.foo_t)(unsafe.Pointer(C.alloc_malloc()))
 	defer C.free_malloc(foo)
@@ -295,6 +329,19 @@ func benchmarkMallocUnsafeSlice() {
 	data1 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data1)), int(foo.size1))
 	data2 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data2)), int(foo.size2))
 	data3 := unsafe.Slice((*byte)(unsafe.Pointer(foo.data3)), int(foo.size3))
+
+	checkCdata1(data1)
+	checkCdata2(data2)
+	checkCdata3(data3)
+}
+
+func benchmarkMallocUnsafeSlice2() {
+	foo := (*C.foo_t)(unsafe.Pointer(C.alloc_malloc()))
+	defer C.free_malloc(foo)
+
+	data1 := cgobytepool.UnsafeGoBytes(unsafe.Pointer(foo.data1), int(foo.size1))
+	data2 := cgobytepool.UnsafeGoBytes(unsafe.Pointer(foo.data2), int(foo.size2))
+	data3 := cgobytepool.UnsafeGoBytes(unsafe.Pointer(foo.data3), int(foo.size3))
 
 	checkCdata1(data1)
 	checkCdata2(data2)
@@ -342,4 +389,69 @@ func benchmarkGo(p cgobytepool.Pool) {
 	p.Put(ptr1, n1)
 	p.Put(ptr2, n2)
 	p.Put(ptr3, n3)
+}
+
+func benchmarkCBytes() {
+	data1 := make([]byte, 16*1024)
+	data1[0] = 140
+	data1[1000] = 141
+	data1[16383] = 142
+
+	data2 := make([]byte, 4*1024)
+	data2[0] = 150
+	data2[500] = 151
+	data2[4095] = 152
+
+	data3 := make([]byte, 512)
+	data3[0] = 160
+	data3[510] = 161
+	data3[511] = 162
+
+	ptr1 := C.CBytes(data1)
+	ptr2 := C.CBytes(data2)
+	ptr3 := C.CBytes(data3)
+
+	if ret := C.check1((*C.uchar)(ptr1)); ret != C.int(0) {
+		panic("err")
+	}
+	if ret := C.check2((*C.uchar)(ptr2)); ret != C.int(0) {
+		panic("err")
+	}
+	if ret := C.check3((*C.uchar)(ptr3)); ret != C.int(0) {
+		panic("err")
+	}
+}
+
+func benchmarkCBytes_cgobytepool(p cgobytepool.Pool) {
+	data1 := make([]byte, 16*1024)
+	data1[0] = 140
+	data1[1000] = 141
+	data1[16383] = 142
+
+	data2 := make([]byte, 4*1024)
+	data2[0] = 150
+	data2[500] = 151
+	data2[4095] = 152
+
+	data3 := make([]byte, 512)
+	data3[0] = 160
+	data3[510] = 161
+	data3[511] = 162
+
+	ptr1, done1 := cgobytepool.CBytes(p, data1)
+	defer done1()
+	ptr2, done2 := cgobytepool.CBytes(p, data2)
+	defer done2()
+	ptr3, done3 := cgobytepool.CBytes(p, data3)
+	defer done3()
+
+	if ret := C.check1((*C.uchar)(ptr1)); ret != C.int(0) {
+		panic("err")
+	}
+	if ret := C.check2((*C.uchar)(ptr2)); ret != C.int(0) {
+		panic("err")
+	}
+	if ret := C.check3((*C.uchar)(ptr3)); ret != C.int(0) {
+		panic("err")
+	}
 }
