@@ -79,10 +79,24 @@ func BenchmarkCgoBytePool(b *testing.B) {
 			}
 		})
 	})
+	b.Run("malloc_reflect2", func(tb *testing.B) {
+		tb.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				benchmarkMallocReflect2()
+			}
+		})
+	})
 	b.Run("malloc_unsafeslice", func(tb *testing.B) {
 		tb.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
 				benchmarkMallocUnsafeSlice()
+			}
+		})
+	})
+	b.Run("malloc_unsafeslice2", func(tb *testing.B) {
+		tb.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				benchmarkMallocUnsafeSlice2()
 			}
 		})
 	})
@@ -137,6 +151,27 @@ func BenchmarkCgoBytePool(b *testing.B) {
 				p.Put(data1)
 				p.Put(data2)
 				p.Put(data3)
+			}
+		})
+	})
+	b.Run("cbytes", func(tb *testing.B) {
+		tb.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				benchmarkCBytes()
+			}
+		})
+	})
+	b.Run("cgobytepool_cbytes", func(tb *testing.B) {
+		p := cgobytepool.NewPool(
+			cgobytepool.DefaultMemoryAlignmentFunc,
+			cgobytepool.WithPoolSize(1000, 16*1024),
+			cgobytepool.WithPoolSize(1000, 4*1024),
+			cgobytepool.WithPoolSize(1000, 512),
+		)
+		tb.ResetTimer()
+		tb.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				benchmarkCBytes_cgobytepool(p)
 			}
 		})
 	})
