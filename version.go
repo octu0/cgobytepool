@@ -2,5 +2,5 @@ package cgobytepool
 
 const (
 	AppName string = "cgobytepool"
-	Version string = "1.0.2"
+	Version string = "1.0.3"
 )
