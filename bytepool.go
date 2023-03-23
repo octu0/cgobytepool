@@ -18,6 +18,8 @@ type PoolStats struct {
 	Allocs []struct {
 		ID   int
 		Size int64
+		Len  int
+		Cap  int
 	}
 	Fallback struct {
 		ID   int
@@ -88,7 +90,19 @@ type CgoBytePool struct {
 }
 
 func (p *CgoBytePool) find(size int) (*cmallocPool, bool) {
+	// small to large
 	for _, pp := range p.pools {
+		if size <= pp.bufSize {
+			return pp, true
+		}
+	}
+	return nil, false
+}
+
+func (p *CgoBytePool) reverseFind(size int) (*cmallocPool, bool) {
+	// large to small
+	for i := len(p.pools) - 1; 0 <= i; i -= 1 {
+		pp := p.pools[i]
 		if size <= pp.bufSize {
 			return pp, true
 		}
@@ -121,8 +135,7 @@ func (p *CgoBytePool) Put(b unsafe.Pointer, size int) {
 }
 
 func (p *CgoBytePool) fallbackPut(b unsafe.Pointer, n int) {
-	v, ok := p.fallbacks.LoadAndDelete(uintptr(b))
-	if ok {
+	if v, ok := p.fallbacks.LoadAndDelete(uintptr(b)); ok {
 		ptr := v.(unsafe.Pointer)
 		C.free(ptr)
 		atomic.AddInt64(&p.bytes, -1*int64(n))
@@ -134,12 +147,16 @@ func (p *CgoBytePool) Stats() PoolStats {
 		Allocs: make([]struct {
 			ID   int
 			Size int64
+			Len  int
+			Cap  int
 		}, len(p.pools)),
 	}
 
 	for i, pp := range p.pools {
 		ps.Allocs[i].ID = i
 		ps.Allocs[i].Size = pp.AllocBytes()
+		ps.Allocs[i].Len = pp.Len()
+		ps.Allocs[i].Cap = pp.Cap()
 	}
 	ps.Fallback.ID = 0
 	ps.Fallback.Size = p.AllocBytes()
@@ -207,11 +224,6 @@ func (p *cmallocPool) Get() unsafe.Pointer {
 }
 
 func (p *cmallocPool) Put(data unsafe.Pointer, size int) {
-	if size < p.bufSize {
-		C.free(data)
-		return // discard
-	}
-
 	select {
 	case p.pool <- data:
 		// ok
@@ -224,6 +236,14 @@ func (p *cmallocPool) Put(data unsafe.Pointer, size int) {
 
 func (p *cmallocPool) AllocBytes() int64 {
 	return atomic.LoadInt64(&p.bytes)
+}
+
+func (p *cmallocPool) Len() int {
+	return len(p.pool)
+}
+
+func (p *cmallocPool) Cap() int {
+	return cap(p.pool)
 }
 
 func (p *cmallocPool) Close() {
